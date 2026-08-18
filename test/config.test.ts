@@ -1,6 +1,24 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { vi } from "vitest";
+
+// loadConfig() treats /.dockerenv as "we are in Docker" and then pins workspace
+// to /workspace. Hide that file so host-path tests stay hermetic when the test
+// runner itself is containerized. The dedicated Docker test still uses
+// process.env.container = "docker".
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    existsSync: (filePath: Parameters<typeof actual.existsSync>[0]) => {
+      if (String(filePath) === "/.dockerenv") {
+        return false;
+      }
+      return actual.existsSync(filePath);
+    },
+  };
+});
 
 import { loadConfig } from "../src/config.js";
 
