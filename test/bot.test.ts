@@ -62,6 +62,30 @@ type SwitchResult = Awaited<ReturnType<PiSessionService["switchSession"]>>;
 const ALLOWED_USER_ID = 123;
 const ALLOWED_CHAT_ID = 456;
 
+// Prompt replies now go out as Telegram rich messages (`{ markdown }`).
+// Assertions still inspect the mock send/edit text argument, so unwrap both
+// plain strings and rich payloads to the visible markdown/html/text body.
+function extractTelegramText(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.markdown === "string") {
+      return record.markdown;
+    }
+    if (typeof record.html === "string") {
+      return record.html;
+    }
+    if (typeof record.text === "string") {
+      return record.text;
+    }
+  }
+
+  return String(value ?? "");
+}
+
 function makeTreeNode(
   entry: Record<string, any>,
   children: any[] = [],
@@ -485,11 +509,28 @@ function setupBot(options: SetupOptions = {}) {
             message_thread_id: payload.message_thread_id,
           }),
         };
+      // Production prompt streaming uses sendRichMessage. Route it through the
+      // existing sendMessage spy so tests can keep asserting on call[1] text.
+      case "sendRichMessage":
+        return {
+          ok: true,
+          result: await api.sendMessage(payload.chat_id, extractTelegramText(payload.rich_message), {
+            reply_markup: payload.reply_markup,
+            message_thread_id: payload.message_thread_id,
+          }),
+        };
       case "editMessageText":
-        await api.editMessageText(payload.chat_id, payload.message_id, payload.text, {
-          parse_mode: payload.parse_mode,
-          reply_markup: payload.reply_markup,
-        });
+        // Rich edits send `rich_message` instead of `text`. Unwrap either shape
+        // so String(call[2]) still sees the visible body.
+        await api.editMessageText(
+          payload.chat_id,
+          payload.message_id,
+          extractTelegramText(payload.text ?? payload.rich_message),
+          {
+            parse_mode: payload.parse_mode,
+            reply_markup: payload.reply_markup,
+          },
+        );
         return { ok: true, result: true };
       case "editMessageReplyMarkup":
         await api.editMessageReplyMarkup(payload.chat_id, payload.message_id, {
@@ -3674,10 +3715,15 @@ describe("createBot", () => {
       longResponse.pi.emitAgentEnd();
     });
     await longResponse.bot.handleUpdate(createTestUpdate({ message: { text: "long reply" } }));
-    expect(longResponse.api.sendMessage.mock.calls.some((call) => String(call[1]).includes("preview truncated"))).toBe(
-      true,
-    );
-    expect(longResponse.api.sendMessage.mock.calls.length).toBeGreaterThan(1);
+    // Rich mode first sends a preview, then edits that same message. Look at
+    // both spies: the old 4k "preview truncated" marker no longer appears under
+    // the 32k rich limit, but the streamed body still has to land somewhere.
+    const delivered = [
+      ...longResponse.api.sendMessage.mock.calls.map((call) => String(call[1])),
+      ...longResponse.api.editMessageText.mock.calls.map((call) => String(call[2])),
+    ];
+    expect(delivered.some((text) => text.includes("word "))).toBe(true);
+    expect(delivered.length).toBeGreaterThan(1);
   });
 
   it("registers bot commands", async () => {
