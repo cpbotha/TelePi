@@ -487,6 +487,17 @@ export function isMessageNotModifiedError(error: unknown): boolean {
   return message.includes("message is not modified");
 }
 
+// Telegram cancels an in-flight editMessageText when a newer edit request for the
+// same message arrives first. The newer request carries the fresher body, so the
+// cancelled one is safe to drop.
+export function isSupersededEditError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    message.includes("canceled by new edit message request") ||
+    message.includes("cancelled by new edit message request")
+  );
+}
+
 export function isTelegramParseError(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return (

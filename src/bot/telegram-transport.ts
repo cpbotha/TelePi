@@ -7,6 +7,7 @@ import { type InlineKeyboard, Bot, type Context } from "grammy";
 
 import {
   isMessageNotModifiedError,
+  isSupersededEditError,
   isTelegramParseError,
   splitTelegramText,
   type TelegramParseMode,
@@ -104,9 +105,16 @@ export async function safeEditMessage(
 ): Promise<void> {
   if (options.rich) {
     // if in rich mode, we do not send parse_mode, and we send InputRichMessage into the text arg
-    await bot.api.editMessageText(target.chatId, messageId, { markdown: text }, {
-      reply_markup: options.replyMarkup,
-    });
+    try {
+      await bot.api.editMessageText(target.chatId, messageId, { markdown: text }, {
+        reply_markup: options.replyMarkup,
+      });
+    } catch (error) {
+      if (isMessageNotModifiedError(error) || isSupersededEditError(error)) {
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
@@ -120,7 +128,7 @@ export async function safeEditMessage(
       reply_markup: options.replyMarkup,
     });
   } catch (error) {
-    if (isMessageNotModifiedError(error)) {
+    if (isMessageNotModifiedError(error) || isSupersededEditError(error)) {
       return;
     }
 

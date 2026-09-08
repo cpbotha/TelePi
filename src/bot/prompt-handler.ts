@@ -116,6 +116,7 @@ async function runPromptFlow(
   let flushTimer: NodeJS.Timeout | undefined;
   let isFlushing = false;
   let flushPending = false;
+  let flushPromise: Promise<void> | undefined;
   let finalized = false;
 
   const typingInterval = setInterval(() => {
@@ -213,7 +214,7 @@ async function runPromptFlow(
 
   // does the work for scheduleFlush, the onTextDelta handler
   // in other words, this sends chunks of text to the user on telegram as they come in from Pi
-  const flushResponse = async (force = false): Promise<void> => {
+  const runFlush = async (force = false): Promise<void> => {
     if (!accumulatedText) {
       return;
     }
@@ -255,6 +256,32 @@ async function runPromptFlow(
       if (flushPending) {
         flushPending = false;
         scheduleFlush();
+      }
+    }
+  };
+
+  const flushResponse = async (force = false): Promise<void> => {
+    flushPromise = runFlush(force);
+    try {
+      await flushPromise;
+    } finally {
+      flushPromise = undefined;
+    }
+  };
+
+  // The final edit has to wait for any draft edit still in flight. Telegram answers
+  // the loser of two concurrent edits with 400 "canceled by new edit message request",
+  // and a draft edit landing after the final one would overwrite the finished message.
+  const awaitPendingFlush = async (): Promise<void> => {
+    while (flushPromise) {
+      const pending = flushPromise;
+      try {
+        await pending;
+      } catch {
+        // Flush failures are already reported by the scheduleFlush caller.
+      }
+      if (flushPromise === pending) {
+        flushPromise = undefined;
       }
     }
   };
@@ -342,6 +369,8 @@ async function runPromptFlow(
         // If the initial send failed, we will fall back to sending the final response below.
       }
     }
+
+    await awaitPendingFlush();
 
     const finalText = buildFinalResponseText(accumulatedText);
     if (!finalText) {
@@ -541,6 +570,7 @@ async function runPromptFlow(
       console.error("Pi prompt error after finalization:", formatError(error));
     } else {
       finalized = true;
+      await awaitPendingFlush();
 
       const combinedText = buildFinalResponseText(renderPromptFailure(accumulatedText, error));
       const chunks = splitMarkdownForTelegram(combinedText);

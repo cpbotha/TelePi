@@ -26,6 +26,7 @@ import {
   summarizeToolOutput,
   trimLine,
   isMessageNotModifiedError,
+  isSupersededEditError,
   isTelegramParseError,
 } from "../../src/bot/message-rendering.js";
 
@@ -172,6 +173,10 @@ describe("bot message rendering helpers", () => {
   it("recognizes Telegram parse and message-not-modified errors", () => {
     expect(isMessageNotModifiedError(new Error("Bad Request: message is not modified"))).toBe(true);
     expect(isMessageNotModifiedError(new Error("other"))).toBe(false);
+
+    expect(isSupersededEditError(new Error("Bad Request: canceled by new edit message request"))).toBe(true);
+    expect(isSupersededEditError(new Error("Bad Request: cancelled by new edit message request"))).toBe(true);
+    expect(isSupersededEditError(new Error("Bad Request: message is not modified"))).toBe(false);
 
     expect(isTelegramParseError(new Error("Bad Request: can't parse entities"))).toBe(true);
     expect(isTelegramParseError(new Error("unsupported start tag at byte offset 1"))).toBe(true);

@@ -113,4 +113,30 @@ describe("bot telegram transport helpers", () => {
       reply_markup: undefined,
     });
   });
+
+  it("ignores edits that Telegram canceled in favor of a newer edit request", async () => {
+    const bot = {
+      api: {
+        editMessageText: vi.fn().mockRejectedValue(
+          new Error("Bad Request: canceled by new edit message request"),
+        ),
+      },
+    };
+
+    await expect(
+      safeEditMessage(bot as any, { chatId: 123 }, 1, "draft", { fallbackText: "draft" }),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      safeEditMessage(bot as any, { chatId: 123 }, 1, "draft", { rich: true }),
+    ).resolves.toBeUndefined();
+
+    expect(bot.api.editMessageText).toHaveBeenNthCalledWith(1, 123, 1, "draft", {
+      parse_mode: "HTML",
+      reply_markup: undefined,
+    });
+    expect(bot.api.editMessageText).toHaveBeenNthCalledWith(2, 123, 1, { markdown: "draft" }, {
+      reply_markup: undefined,
+    });
+  });
 });
