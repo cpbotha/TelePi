@@ -1365,7 +1365,9 @@ async function applySessionSetup(
   }
 
   await setup(session.sessionManager);
-  session.agent.state.messages = session.sessionManager.buildSessionContext().messages;
+  // Pi 0.87 makes SessionManager canonical for provider context, so reload the
+  // finalized transcript instead of assigning agent.state.messages directly.
+  session.refreshContext();
 }
 
 function collectSettingsDiagnostics(settingsManager: SettingsManager): PiSessionDiagnostic[] {

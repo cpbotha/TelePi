@@ -125,6 +125,7 @@ const mockState = vi.hoisted(() => {
       abort: vi.fn().mockResolvedValue(undefined),
       reload: vi.fn().mockResolvedValue(undefined),
       navigateTree: vi.fn().mockResolvedValue({ cancelled: false }),
+      refreshContext: vi.fn(),
       getActiveToolNames: vi.fn().mockImplementation(() => [...activeToolNames]),
       setActiveToolsByName: vi.fn().mockImplementation((toolNames: string[]) => {
         activeToolNames = [...toolNames];
@@ -254,7 +255,7 @@ const mockState = vi.hoisted(() => {
         currentFallbackMessage = nextResult.modelFallbackMessage;
         if (runtimeOptions?.setup) {
           await runtimeOptions.setup(currentSession.sessionManager);
-          currentSession.agent.state.messages = currentSession.sessionManager.buildSessionContext().messages;
+          currentSession.refreshContext();
         }
         return { cancelled: false };
       }),
@@ -743,6 +744,17 @@ describe("PiSessionService", () => {
     expect(result.created).toBe(true);
     expect(result.info.workspace).toBe("/workspace/other");
     expect(service.getCurrentWorkspace()).toBe("/workspace/other");
+  });
+
+  it("refreshes the canonical session context after cross-workspace setup", async () => {
+    const service = await PiSessionService.create(createConfig());
+    const setup = vi.fn().mockResolvedValue(undefined);
+
+    await service.newSession({ workspace: "/workspace/other", setup });
+
+    const nextSession = mockState.createdSessions[1]?.session;
+    expect(setup).toHaveBeenCalledWith(nextSession.sessionManager);
+    expect(nextSession.refreshContext).toHaveBeenCalledTimes(1);
   });
 
   it("throws when withSession is requested for a cross-workspace new session", async () => {
