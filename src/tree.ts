@@ -112,6 +112,8 @@ export function describeEntry(entry: TreeEntryLike): string {
       return `[custom ${entry.customType ?? "unknown"}]`;
     case "label":
       return `[label ${entry.label ?? ""}]`;
+    case "context_edit":
+      return entry.replacement === null ? "[context edit: omitted]" : "[context edit]";
     case "session_info":
       return `[session ${entry.name ?? "unnamed"}]`;
     default:

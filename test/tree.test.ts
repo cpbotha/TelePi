@@ -94,6 +94,8 @@ describe("tree rendering", () => {
         describeEntry({ type: "model_change", provider: "anthropic", modelId: "claude-sonnet-4-5" }),
       ).toBe("[model anthropic/claude-sonnet-4-5]");
       expect(describeEntry({ type: "unknownType" })).toBe("[unknownType]");
+      expect(describeEntry({ type: "context_edit", replacement: [{ type: "text", text: "patched" }] })).toBe("[context edit]");
+      expect(describeEntry({ type: "context_edit", replacement: null })).toBe("[context edit: omitted]");
     });
   });
 
