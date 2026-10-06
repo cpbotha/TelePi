@@ -21,7 +21,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # npm Trusted Publishing currently requires Node 22.14.0+.
-          node-version: 22.14
+          # The pi packages require Node 22.19.0+, so pin the newer floor.
+          node-version: 22.19
           cache: npm
 
       - name: Show Node and npm versions

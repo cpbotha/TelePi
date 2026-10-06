@@ -94,7 +94,7 @@ Prefer invoking a pinned npm 11 release via `npx` instead of trying to self-upgr
 - name: Set up Node.js
   uses: actions/setup-node@v4
   with:
-    node-version: 22.14
+    node-version: 22.19
     cache: npm
 
 - name: Show Node and npm versions
